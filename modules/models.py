@@ -231,6 +231,30 @@ class mlp(nn.Module):
         return x
 
 
+class Net(torch.nn.Module):
+    def __init__(self):
+        super().__init__(inp_dim, hid_dim, out_dim)
+        self.conv1 = GraphConv(inp_dim,  hid_dim)
+        self.conv2 = GraphConv(hid_dim, out_dim)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = torch.relu(self.conv1(x, edge_index, edge_attr))
+        x = self.conv2(x, edge_index, edge_attr)
+        return x
+
+
+class Net(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = GraphConv(data.num_features,  GCN_hid_dim)
+        self.conv2 = GraphConv(GCN_hid_dim, data.num_classes)
+
+    def forward(self, x, edge_index, edge_attr):
+        x = torch.relu(self.conv1(x, edge_index, edge_attr))
+        x = self.conv2(x, edge_index, edge_attr)
+        return x
+
+
 class LaplaceDenoiser_one_pointset:
     """Identical to LaplaceDenoiser class but adapted to 1-sized datasets."""
 
