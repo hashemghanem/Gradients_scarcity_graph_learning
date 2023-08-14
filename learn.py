@@ -1,5 +1,5 @@
+import argparse
 
-# %%
 import os.path as osp
 import os
 import sys
@@ -17,9 +17,6 @@ from modules.datasets import get_hub_graph, cheaters_network, fetch_Planetoid_da
 from modules.models import MlpG2gCora, Net
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-dataset = sys.argv[1]
-classifier = sys.argv[2]
-fix = sys.argv[3]
 # Load the dataset
 if dataset == 'Cora':
     data = fetch_Planetoid_dataset(dataset)
@@ -46,11 +43,11 @@ if fix == 'Regularization':
 else:
     graph_reg_mag = 0.
 
-if fix = 'G2G' and classifier == 'Laplacian' and dataset == 'Cora':
+if fix == 'G2G' and classifier == 'Laplacian' and dataset == 'Cora':
     lr_out = 0.001
-elif fix = 'G2G' and classifier == 'GCN' and dataset == 'Cora':
+elif fix == 'G2G' and classifier == 'GCN' and dataset == 'Cora':
     lr_out = 0.0001
-elif fix = 'G2G' and classifier == 'GCN' and dataset == 'Cheaters':
+elif fix == 'G2G' and classifier == 'GCN' and dataset == 'Cheaters':
     lr_out = 0.001
 else:
     lr_out = 0.01
@@ -208,3 +205,11 @@ for itrout in range(0, MAX_OUT_ITER):
     #         params.data.copy_(new_params[name])
 print(f"Best validation accuracy: {best_val_acc:.4f}, "
       f"Best test accuracy: {best_test_acc:.4f}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description='This is the graph learning script')
+    parser.add_argument(
+        'dataset', help='available ones are Cora, CiteSeer, PubMed, Cheaters, Synthetic1')
+    parser.add_argument('classifier', help='Gnn or Laplacian')
+    args = parser.parse_args()
