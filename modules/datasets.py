@@ -342,3 +342,80 @@ def G2G_for_laplacian(nsamples=100, npoints=200, ncoordinates=2,
                     train_out_mask=train_out_mask,
                     val_mask=val_mask, num_features=ncoordinates)
         return data
+
+
+def synthetic1(nsamples=100, npoints=200, ncoordinates=2,
+               sigma=1.,  rang=None, train_in_size=10,
+               train_out_size=10, val_size=10):
+    """G2G+laplacian Gaussian kernel."""
+    if rang is None:
+        rang = 1.
+    x = rang*torch.rand((nsamples, npoints, ncoordinates))
+    x[:, :, 0] = x[:, :, 0].sort()[0]
+    dist = (x[:, None, :, :]).expand(-1, npoints, -1, -1)
+    dist = -((dist - dist.transpose(1, 2))**2).sum(dim=3)/sigma**2
+    adj_star = -dist < 1
+    adj_star[0].fill_diagonal_(False)
+    triu = torch.triu_indices(npoints, npoints)
+    discrete_edges = (adj_star[:, triu[0], triu[1]])
+    adj = torch.zeros_like(adj_star)
+    adj[:, triu[0], triu[1]] = discrete_edges
+    adj[:, triu[1], triu[0]] = discrete_edges
+    print("Num of edges is:", (adj[0].sum().item() - npoints)/2)
+    print("Target num of edges:", math.log(npoints)*npoints)
+    train_in_mask = torch.zeros(npoints, dtype=torch.bool)
+    train_in_mask[:train_in_size//2] = True
+    train_in_mask[-train_in_size//2:] = True
+    train_out_mask = torch.zeros(npoints, dtype=torch.bool)
+    train_out_mask[npoints//2-train_out_size //
+                   2:npoints//2+train_out_size//2] = True
+    val_mask = torch.zeros(npoints, dtype=torch.bool)
+    val_mask[train_in_size//2:train_in_size//2 + val_size] = True
+    # Labeling function. y dim at the end is [nsamples, npoints].
+    y = Gaussians_sum_labeling(x)
+    if nsamples > 1:
+        return Data(x=x, y=y, adj_star=adj_star, adj=adj,
+                    train_in_mask=train_in_mask,
+                    train_out_mask=train_out_mask,
+                    val_mask=val_mask, num_features=ncoordinates)
+    else:
+        edge_index, edge_attr = dense_to_sparse(adj[0])
+        data = Data(x=x[0], edge_index=edge_index, adj_star=adj_star[0],
+                    edge_attr=edge_attr, y=y.flatten(),
+                    train_in_mask=train_in_mask,
+                    train_out_mask=train_out_mask,
+                    val_mask=val_mask, num_features=ncoordinates)
+        return data
+
+    data.train_in_mask = torch.zeros(npoints, dtype=torch.bool)
+    data.train_in_mask[((2*data.x-1)**2).sum(axis=1) < .08] = True
+    size_vtr = int(data.train_in_mask.sum())
+
+    if high_freq_in:
+        data.train_in_mask = torch.zeros(npoints, dtype=torch.bool)
+        data.train_in_mask[np.random.choice(
+            npoints, size=size_vtr, replace=False)] = True
+
+    data.train_out_mask = torch.zeros(npoints, dtype=torch.bool)
+    data.train_out_mask[((2*data.x-1)**2).sum(axis=1) < .02] = True
+    size_vtout = int(data.train_out_mask.sum())
+    if high_freq_out:
+        data.train_out_mask = torch.zeros(npoints, dtype=torch.bool)
+        data.train_out_mask[np.random.choice(
+            npoints, size=size_vtout, replace=False)] = True
+
+
+def fetch_dataset(dataset):
+    # Load the dataset
+    if dataset in ["Cora", "CiteSeer", "PubMed"]:
+        return fetch_Planetoid_dataset(dataset)
+    elif dataset == 'Cheaters':
+        return cheaters_network(nsamples=1, npoints=256, ncoordinates=10,
+                                passing_threshold=59., epsilon=.027,
+                                aggregation='sum', scale_adj=1.,
+                                train_in_size=256//4, train_out_size=256//4,
+                                val_size=256//4, test_size=256//4)
+    elif dataset == "Synthetic1HighFrequency":
+        return synthetic1()
+    elif dataset == "Synthetic1LowFrequency":
+        return synthetic1()
