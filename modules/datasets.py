@@ -254,6 +254,7 @@ def fetch_Planetoid_dataset(dataset='Cora'):
     # Determine the output directory
     data.num_features = dataset.num_features
     data.num_classes = dataset.num_classes
+    data.edge_attr = torch.ones(data.edge_index.shape[1])
     return data
 
 

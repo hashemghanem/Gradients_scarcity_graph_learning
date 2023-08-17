@@ -99,40 +99,6 @@ class MlpPointWise(nn.Module):
         return x
 
 
-class MlpG2g(nn.Module):
-    def __init__(self, inp_dim, hid_dim, nlayers=1, pnt_inp_dim=2,
-                 pnt_hid_dim=32, pnt_out_dim=2, pnt_nlayers=1):
-        super().__init__()
-        self.embed_pnt = MlpPointWise(
-            pnt_inp_dim, pnt_hid_dim, pnt_out_dim, pnt_nlayers)
-        self.nlayers = nlayers
-        self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.layers = nn.ModuleList(
-            [nn.Linear(hid_dim, hid_dim) for _ in range(nlayers-1)])
-        self.bns = nn.ModuleList(
-            [nn.BatchNorm1d(hid_dim) for _ in range(nlayers-1)])
-        self.fc2 = nn.Linear(hid_dim, 1)
-
-    def forward(self, x, adj=None):
-        batch_size = x.shape[0]
-        npoints = x.shape[1]
-        # Compute the point-wise embedding.
-        x = self.embed_pnt(x.view(-1, x.shape[-1]))
-        x = x.view(batch_size, npoints, -1)
-        # Prepare input for the G2G model.
-        dist = (x[:, None, :, :]).expand(-1, npoints, -1, -1)
-        dist = ((dist - dist.transpose(1, 2))**2)
-        if adj is not None:
-            dist = torch.cat((dist, adj[:, :, :, None]), dim=3)
-        x = dist.view(-1, dist.shape[-1])
-        x = F.relu(self.fc1(x))
-        for i in range(self.nlayers-1):
-            x = F.relu(self.layers[i](x))
-            # x = self.bns[i](x)
-        x = torch.sigmoid(self.fc2(x))
-        return x.view(batch_size, npoints, npoints)
-
-
 class MlpG2gCoraDense(nn.Module):
     def __init__(self, inp_dim, hid_dim, out_dim=1):
         super().__init__()
@@ -183,13 +149,15 @@ class MlpG2gCora_sigmoid(torch.nn.Module):
         return x
 
 
-class MlpG2gCora(torch.nn.Module):
+class MlpG2g(torch.nn.Module):
     def __init__(self, inp_dim, hid_dim, out_dim=1):
         super().__init__()
         self.bn1 = nn.BatchNorm1d(inp_dim)
         self.fc1 = torch.nn.Linear(inp_dim, hid_dim)
         self.fc2 = torch.nn.Linear(hid_dim, hid_dim)
         self.fc3 = torch.nn.Linear(hid_dim, out_dim)
+        self.fc3.bias.data.fill_(1e-5)
+        self.fc3.weight.data.fill_(1e-5)
 
     def get_g2g_input(self, x, edge_index):
         feat1 = x[edge_index[0]]
@@ -232,22 +200,10 @@ class mlp(nn.Module):
 
 
 class Net(torch.nn.Module):
-    def __init__(self):
-        super().__init__(inp_dim, hid_dim, out_dim)
+    def __init__(self, inp_dim, hid_dim, out_dim):
+        super().__init__()
         self.conv1 = GraphConv(inp_dim,  hid_dim)
         self.conv2 = GraphConv(hid_dim, out_dim)
-
-    def forward(self, x, edge_index, edge_attr):
-        x = torch.relu(self.conv1(x, edge_index, edge_attr))
-        x = self.conv2(x, edge_index, edge_attr)
-        return x
-
-
-class Net(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv1 = GraphConv(data.num_features,  GCN_hid_dim)
-        self.conv2 = GraphConv(GCN_hid_dim, data.num_classes)
 
     def forward(self, x, edge_index, edge_attr):
         x = torch.relu(self.conv1(x, edge_index, edge_attr))
@@ -387,3 +343,16 @@ class LaplaceDenoiser:
                 print("Iter {:<30}, inner loss= {:<30}, data fidelity= {:<20}".format(
                     i+1, loss.item(), data_fidelity))
         return y_hat, loss
+
+
+class Alearner(nn.Module):
+    def __init__(self, m, init=None):
+        super().__init__()
+        if init is None:
+            self.A = nn.Parameter(torch.rand(m))
+            self.A.data.fill_(1e-5)
+        else:
+            self.A = nn.Parameter(init)
+
+    def forward(self):
+        return self.A
