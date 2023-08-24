@@ -274,6 +274,80 @@ class LaplaceDenoiser_one_pointset:
         return y_hat, loss
 
 
+class TrainGNN:
+    def __init__(self, lr, MAX_ITER, train_mask, task='regression', num_classes=None):
+        self.lr = lr
+        self.MAX_ITER = MAX_ITER
+        self.train_mask = train_mask
+        self.lossf = nn.MSELoss()
+        self.task = task
+        if task == 'classification':
+            self.lossf = nn.CrossEntropyLoss()
+            self.num_classes = num_classes
+
+    def get_loss(self, edge_index, edge_attr, y, y_hat, lamb="inv_npoints_sqr", extra_lamb=1.):
+        npoints = y.shape[0]
+        data_fidelity = self.lossf(y_hat[self.train_mask], y[self.train_mask])
+        # the transpose below is for broadcastability.
+        reg_term = (
+            edge_attr*torch.square(y_hat[edge_index[0]] - y_hat[edge_index[1]]).T).T
+        reg_term = reg_term.sum()
+        if lamb == "inv_npoints_sqr":
+            lamb = .1/npoints**2
+        elif lamb == "inv_adj_sum":
+            lamb = 1./edge_index.shape[-1]
+        loss = data_fidelity + extra_lamb*lamb*reg_term
+        return loss, data_fidelity
+
+    def optimize(self, edge_index, edge_attr, p, y, y_hat=None, unroll_optim=True):
+        with higher.innerloop_ctx(classifier, inner_optim) as (fmodel, diffopt):
+            for itrin in range(MAX_IN_ITER):
+                # compute predicted classes
+                out = fmodel(data.x, data.edge_index, edge_attr)
+                loss = F.cross_entropy(
+                    out[data.train_in_mask], data.y[data.train_in_mask])
+                diffopt.step(loss)
+                tr_in_loss[itrout] = loss.item()
+                accs = []
+                for _, mask in data('train_in_mask', 'train_out_mask', 'val_mask', 'test_mask'):
+                    pred = out[mask].max(1)[1]
+                    acc = pred.eq(data.y[mask]).sum(
+                    ).item() / mask.sum().item()
+                    accs.append(acc)
+                tr_in_acc[itrout], tr_out_acc[itrout], val_acc[itrout], test_acc[itrout] = accs
+                if val_acc[itrout] > best_val_acc:
+                    best_val_acc = val_acc[itrout].item()
+                    best_test_acc = test_acc[itrout].item()
+                    if False is True:
+                        torch.save(graph_gener, os.path.join(
+                            out_dir, "graph_gener.pth"))
+                        torch.save(edge_attr, os.path.join(
+                            out_dir, "edge_attr.pt"))
+                        torch.save(classifier, os.path.join(
+                            out_dir, "gnn.pth"))
+
+                if itrin % 20 == 0:
+                    print(f'Outer iteration: {itrout:03d}, Inner iteration: {itrin:03d}, '
+                          f'Inner: {tr_in_acc[itrout]:.4f}, Outer: {tr_out_acc[itrout]:.4f}, '
+                          f'Validation: {val_acc[itrout]: .4f}, Test: {test_acc[itrout]: .4f}, '
+                          f' InLoss: {loss.item():.4f}')
+            # Do one outer iteration, first:
+            # compute predicted classes
+            out = fmodel(data.x, data.edge_index, edge_attr)
+            loss = F.cross_entropy(out[data.train_out_mask],
+                                   data.y[data.train_out_mask])
+            print(f"Outer loss:  {loss.item():.6f}, "
+                  f"Best valid acc: {best_val_acc:.4f}, "
+                  f"Best test acc: {best_test_acc:.4f}")
+            tr_out_loss[itrout] = loss.item()
+            # regularizing the graph
+            adj_dense = torch.zeros((len(data.y), len(data.y)), device=device)
+            adj_dense[data.edge_index[0], data.edge_index[1]] = edge_attr
+            graph_reg = - graph_reg_mag * \
+                torch.log(adj_dense.sum(dim=1)).mean()
+            loss = loss + graph_reg
+
+
 class LaplaceDenoiser:
     def __init__(self, lr, MAX_ITER, train_mask):
         self.lr = lr

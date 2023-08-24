@@ -58,6 +58,8 @@ def set_hyperparameters(args):
 
 def train(data, graph_gener, classifier, outer_optim, inner_optim, MAX_IN_ITER, MAX_OUT_ITER, lr_in, lr_out, graph_reg_mag, args):
 
+    criterion = torch.nn.MSELoss()() if args.dataset in [
+        'Synthetic1HighFrequency', 'Synthetic1LowFrequency'] else torch.nn.CrossEntropyLoss()
     best_val_acc, best_test_acc = 0., 0.
     tr_in_loss, tr_out_loss = torch.zeros(
         MAX_OUT_ITER), torch.zeros(MAX_OUT_ITER)
@@ -70,55 +72,11 @@ def train(data, graph_gener, classifier, outer_optim, inner_optim, MAX_IN_ITER, 
     # start training
     for itrout in range(0, MAX_OUT_ITER):
         classifier.train()
-        edge_attr = graph_gener(data.x, data.edge_index)
+        edge_attr = graph_gener(
+            data.x, data.edge_index) if args.method == 'BO+G2G' else graph_gener()
         inner_optim.zero_grad()
         # compute edge_attr output
-        with higher.innerloop_ctx(classifier, inner_optim) as (fmodel, diffopt):
-            for itrin in range(MAX_IN_ITER-unrolled, MAX_IN_ITER):
-                # compute predicted classes
-                out = fmodel(data.x, data.edge_index, edge_attr)
-                loss = F.cross_entropy(
-                    out[data.train_in_mask], data.y[data.train_in_mask])
-                diffopt.step(loss)
-                tr_in_loss[itrout] = loss.item()
-                accs = []
-                for _, mask in data('train_in_mask', 'train_out_mask', 'val_mask', 'test_mask'):
-                    pred = out[mask].max(1)[1]
-                    acc = pred.eq(data.y[mask]).sum(
-                    ).item() / mask.sum().item()
-                    accs.append(acc)
-                tr_in_acc[itrout], tr_out_acc[itrout], val_acc[itrout], test_acc[itrout] = accs
-                if val_acc[itrout] > best_val_acc:
-                    best_val_acc = val_acc[itrout].item()
-                    best_test_acc = test_acc[itrout].item()
-                    if False is True:
-                        torch.save(graph_gener, os.path.join(
-                            out_dir, "graph_gener.pth"))
-                        torch.save(edge_attr, os.path.join(
-                            out_dir, "edge_attr.pt"))
-                        torch.save(classifier, os.path.join(
-                            out_dir, "gnn.pth"))
 
-                if itrin % 20 == 0:
-                    print(f'Outer iteration: {itrout:03d}, Inner iteration: {itrin:03d}, '
-                          f'Inner: {tr_in_acc[itrout]:.4f}, Outer: {tr_out_acc[itrout]:.4f}, '
-                          f'Validation: {val_acc[itrout]: .4f}, Test: {test_acc[itrout]: .4f}, '
-                          f' InLoss: {loss.item():.4f}')
-            # Do one outer iteration, first:
-            # compute predicted classes
-            out = fmodel(data.x, data.edge_index, edge_attr)
-            loss = F.cross_entropy(out[data.train_out_mask],
-                                   data.y[data.train_out_mask])
-            print(f"Outer loss:  {loss.item():.6f}, "
-                  f"Best valid acc: {best_val_acc:.4f}, "
-                  f"Best test acc: {best_test_acc:.4f}")
-            tr_out_loss[itrout] = loss.item()
-            # regularizing the graph
-            adj_dense = torch.zeros((len(data.y), len(data.y)), device=device)
-            adj_dense[data.edge_index[0], data.edge_index[1]] = edge_attr
-            graph_reg = - graph_reg_mag * \
-                torch.log(adj_dense.sum(dim=1)).mean()
-            loss = loss + graph_reg
         outer_optim.zero_grad()
         loss.backward()
         # saved_grad = edge_attr.grad.clone()
@@ -217,6 +175,11 @@ if __name__ == "__main__":
     # to do, choose the classifier based on the argument passed by user.
     # classifier should be defined inside the outer loop maybe its optimizer too?
     # also loss function should be nn.CrossEntropyLoss() or nn.MSELoss() based on the classifier
+    # LaplaceDenoiser_one_pointset is the classifier for the Laplacian method, incorporate it.
+    # complete the train_gnn function in models.
+    # delete unused functions and imports.
+    # document used models in models.
+    # write one training function for both classifier types and do not delete the copy-pasted code in TrainGNN specially in the end as it contains the outer regularization term which you need to move to the main scripts.
     ###################
     classifier = Net(data.num_features, GNN_hid_dim,
                      data.num_classes).to(device)
