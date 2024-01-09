@@ -4,6 +4,7 @@ import os
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Planetoid
 import torch
+import networkx as nx
 import math
 from torch_geometric.data import Data
 from torch_geometric.utils import dense_to_sparse
@@ -420,3 +421,20 @@ def fetch_dataset(dataset):
         return synthetic1()
     elif dataset == "Synthetic1LowFrequency":
         return synthetic1()
+
+def make_graph_connected(data):
+    G = nx.Graph()
+    npoints = data.x.shape[0]
+    G.add_nodes_from([i for i in range(npoints)])
+    G.add_edges_from([(i[0], i[1]) for i in data.edge_index.T.tolist()])
+    comps = list(nx.connected_components(G))
+    counter = 0
+    for i in range(len(comps)-1):
+        G.add_edge(list(comps[i])[0], list(comps[i+1])[0])
+        counter += 1
+    data.edge_index = torch.tensor(list(G.edges)).T
+    data.edge_index = torch.cat(
+        (data.edge_index, data.edge_index[[1, 0]]), dim=1)
+    print("The number of connected componenets is:", counter)
+
+    return data

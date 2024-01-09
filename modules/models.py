@@ -74,22 +74,20 @@ class MlpPointWise(nn.Module):
         return x
 
 class MlpG2g(torch.nn.Module):
-    def __init__(self, inp_dim, hid_dim, out_dim=1):
+    def __init__(self, inp_dim, hid_dim, out_dim=1, nlayers=1):
         super().__init__()
-        self.fc1 = torch.nn.Linear(inp_dim, hid_dim)
-        self.fc2 = torch.nn.Linear(hid_dim, hid_dim)
+        self.nlayers = nlayers
         self.dp1 = nn.Dropout(p=0.5)
-        self.dp2 = nn.Dropout(p=0.5)
-        self.fc3 = torch.nn.Linear(hid_dim, hid_dim)
-        self.fc4 = torch.nn.Linear(hid_dim, out_dim)
-
+        self.fc1 = torch.nn.Linear(inp_dim, hid_dim)
+        self.layers = nn.ModuleList([nn.Linear(hid_dim, hid_dim) for _ in range(nlayers-1)])
+        self.fc2 = torch.nn.Linear(hid_dim, hid_dim)
     def forward(self, x, edge_index):
-        x = self.dp1(F.elu(self.fc1(x)))
-        x = F.elu(self.fc2(x))
         x = x[edge_index[0]] - x[edge_index[1]]
-        x = self.dp2(x**2)
-        x = F.elu(self.fc3(x))
-        x = torch.sigmoid(self.fc4(x)).squeeze()
+        x = self.dp1(x**2)
+        x = F.elu(self.fc1(x))
+        for i in range(self.nlayers-1):
+            x = F.elu(self.layers[i](x))
+        x = torch.sigmoid(self.fc2(x)).squeeze()
         return x
 
 

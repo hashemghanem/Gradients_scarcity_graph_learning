@@ -9,7 +9,7 @@ from matplotlib.colors import SymLogNorm, LogNorm
 import torch
 import networkx as nx
 from torch_geometric.datasets import Planetoid
-from modules.datasets import fetch_dataset, get_hub_graph, cheaters_network, fetch_Planetoid_dataset
+from modules.datasets import fetch_dataset, make_graph_connected
 from modules.models import LaplacianRegulaizer, GNNSimple, GNNAPPNP,  Alearner, MlpG2g
 from modules.myfuns import delete_files_in_directory
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -24,17 +24,17 @@ def get_args():
     parser.add_argument('--plot', default = False, type = bool, help = 'True when you only want to plot the hypergradient at iteration 9')
     parser.add_argument('--save', default = True, type = bool, help = 'whether to save the different losses and the best model in the output directory or not')
     # hyperparameters
-    parser.add_argument('--g2g_hid_dim', default = 32, type=int, help='The hidden dimension of the G2G model if adopted')
-    parser.add_argument('--g2g_num_layers', default = 1, type=int, help='The number of layers of the G2G model if adopted')
-    parser.add_argument('--gnn_hid_dim', default = 16, type=int, help='The hidden dimension of the GNN model if adopted')
-    parser.add_argument('--graph_reg_mag', default = 1., type=float, help='The regularization magnitude parameter')
-    parser.add_argument('--MAX_IN_ITER', default = 100, type=int, help='The number of inner iterations')
-    parser.add_argument('--MAX_OUT_ITER', default = 300, type=int, help='The number of outer iterations')
-    parser.add_argument('--lr_out', default = 0.01, type=float, help='The outer learning rate')
-    parser.add_argument('--lr_in', default = 0.01, type=float, help='The inner learning rate')
-    parser.add_argument('--output_dir', default ="", type=str, help='The output directory')
-    parser.add_argument('--appnp_k', default = 20, type=int, help='The number of iterations of the APPNP model if adopted')
-    parser.add_argument('--appnp_alpha', default = 0.1, type=float, help='The alpha parameter of the APPNP model if adopted')
+    parser.add_argument('--g2g_hid_dim', type=int, help='The hidden dimension of the G2G model if adopted')
+    parser.add_argument('--g2g_num_layers', type=int, help='The number of layers of the G2G model if adopted')
+    parser.add_argument('--gnn_hid_dim', type=int, help='The hidden dimension of the GNN model if adopted')
+    parser.add_argument('--graph_reg_mag', type=float, help='The regularization magnitude parameter')
+    parser.add_argument('--MAX_IN_ITER', type=int, help='The number of inner iterations')
+    parser.add_argument('--MAX_OUT_ITER', type=int, help='The number of outer iterations')
+    parser.add_argument('--lr_out', type=float, help='The outer learning rate')
+    parser.add_argument('--lr_in', type=float, help='The inner learning rate')
+    parser.add_argument('--output_dir', type=str, help='The output directory')
+    parser.add_argument('--appnp_k', type=int, help='The number of iterations of the APPNP model if adopted')
+    parser.add_argument('--appnp_alpha', type=float, help='The alpha parameter of the APPNP model if adopted')
     args = parser.parse_args()
 
     # Check the validity of the arguments
@@ -42,7 +42,7 @@ def get_args():
         msg = 'This code cannot handle the memory demand of learning from '+ args.dataset + " with " + args.method +". To make it do so, change the method from BO+A_obs^6 to BO, BO+G2G, or BO+regularization."
         raise Exception(msg)
 
-    if args.output_dir == "":
+    if args.output_dir is None:
         args.output_dir = os.path.join(os.path.dirname(__file__), "outputs")
     delete_files_in_directory(args.output_dir)
 
@@ -50,6 +50,7 @@ def get_args():
     if args.dataset == 'Cheaters':
         args.g2g_hid_dim = 16
         args.g2g_num_layers = 2
+        args.gnn_hid_dim = 8
         args.MAX_IN_ITER = 200
         args.MAX_OUT_ITER = 150
         if args.method == 'BO+G2G':
@@ -59,8 +60,24 @@ def get_args():
         args.MAX_OUT_ITER = 150
         args.lr_in = 10.
         args.lr_out = 0.1
-    elif args.dataset in ['Cora', 'CiteSeer', 'PubMed'] and args.inner_model == 'Laplacian':
+    elif args.dataset in ['Cora', 'CiteSeer', 'PubMed']:
+        args.g2g_hid_dim = 32
+        args.g2g_num_layers = 1
+        args.gnn_hid_dim = 16
         args.MAX_IN_ITER = 500
+        args.MAX_OUT_ITER = 300
+        args.lr_in = 0.01
+        args.lr_out = 0.01
+        if args.inner_model == 'Laplacian':
+            args.MAX_IN_ITER = 500
+        else:
+            args.MAX_IN_ITER = 100
+    if args.graph_reg_mag is None:
+        args.graph_reg_mag = 1.
+    if args.appnp_k is None:
+        args.appnp_k= 20
+    if args.appnp_alpha is None:
+        args.appnp_alpha= 20
     return args
 
 
@@ -162,7 +179,12 @@ if __name__ == "__main__":
     args = get_args()
     # Fetch and save the dataset
     data = fetch_dataset(args.dataset)
-    torch.save(data, os.path.join(args.output_dir, "dataset.pt"))
+    if args.inner_model =='Laplacian' and args.plot is True:
+        print('#edges before making the graph connected: ', data.edge_index.shape)
+        data = make_graph_connected(data)
+        print('#edges after making the graph connected: ', data.edge_index.shape)
+    if args.save is True:
+        torch.save(data, os.path.join(args.output_dir, "dataset.pt"))
 
     # Migrate to GPU if available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -170,7 +192,7 @@ if __name__ == "__main__":
 
     # set the outer model: G2G or directly learning the adjacency matrix A.
     if args.method == 'BO+G2G':
-        graph_gener = MlpG2g(data.x.shape[1], args.g2g_hid_dim).to(device)
+        graph_gener = MlpG2g(data.x.shape[1], args.g2g_hid_dim, nlayers=args.g2g_num_layers).to(device)
     else:
         graph_gener = Alearner(data.edge_attr.shape[0]).to(device)
     if args.inner_model =="GNN_simple":
@@ -181,19 +203,3 @@ if __name__ == "__main__":
         inner_model = LaplacianRegulaizer(lr=args.lr_in, MAX_ITER=args.MAX_IN_ITER, train_mask=data.train_in_mask, task='regression' if args.dataset in ['Synthetic1HighFrequency', 'Synthetic1LowFrequency'] else 'classification', num_classes=data.num_classes)
 
     train(args, data, graph_gener, inner_model)
-
-    # $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-    # make graph connected if laplacian and plot
-    # argparser put default to None to check if the user passed the argument or not.
-    # modify the laplcaian optimize_yhat and let it return/print bst val acc test acc
-    # fill train function, put best_valid_acc in mlp_g2g. go back to bilevel_optimization directory
-    # and track the history of the mlp_G2G model and see when is it updated to 4 layers, and try to put
-    # it back to only two layers, not four. after fixing this you can go back to continue from train_innner_model from the if comparison with best_val_loss
-    # complete synthetic1 then fetch_dataset funs.
-    # to do, choose the classifier based on the argument passed by user.
-    # classifier should be defined inside the outer loop maybe its optimizer too?
-    # also loss function should be nn.CrossEntropyLoss() or nn.MSELoss() based on the classifier
-    # complete the train_gnn function in models.
-    # document used models in models.
-    # write one training function for both classifier types and do not delete the copy-pasted code in TrainGNN specially in the end as it contains the outer regularization term which you need to move to the main scripts.
-    ###################
