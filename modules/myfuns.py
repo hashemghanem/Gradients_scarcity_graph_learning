@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, TensorDataset
+import torch_geometric
 import torch_geometric.transforms as T
 from torch_geometric.datasets import Planetoid
 
@@ -290,3 +291,10 @@ def spath(data):
     # distance of nodes to V_out
     dist_out = dijkstra[data.train_out_mask].min(dim=0).values
     return dist_in, dist_out, dist_inout
+
+
+def weight_reset(m):
+    if isinstance(m, torch_geometric.nn.GraphConv):
+        m.reset_parameters()
+    else:
+        raise Exception("Not a graph neural network")
