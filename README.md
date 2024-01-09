@@ -1,5 +1,3 @@
-# Note: This repository is still under development and not ready for use. Please check back later for updates.
-
 # Gradient scarcity with bilevel optimization for graph learning
 
 This repo contains the python scripts used to produce the figures in the according paper.
