@@ -239,7 +239,7 @@ def fetch_Planetoid_dataset(dataset='Cora'):
 
     # We change the train_mask to train_in_mask, as this is how it is used.
     data.train_in_mask = data.train_mask.clone()
-    # To save memory.
+    # To save memory
     del data.train_mask
     # Divide the valid set evenly at random into outer training and valid sets.
     # First, pick indices to pick for the outer training set.

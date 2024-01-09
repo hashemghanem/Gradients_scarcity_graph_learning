@@ -4,7 +4,6 @@ import higher
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv, GraphConv, APPNP
 from torch_geometric.utils import dense_to_sparse
-from .datasets import all_pairs_of_nodes_from_pointset
 
 
 

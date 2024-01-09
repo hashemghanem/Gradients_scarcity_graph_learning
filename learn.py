@@ -8,9 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm, LogNorm
 import torch
 import networkx as nx
-import torch.nn.functional as F
-import torch_geometric.transforms as T
-from torch_geometric.utils import dense_to_sparse
 from torch_geometric.datasets import Planetoid
 from modules.datasets import fetch_dataset, get_hub_graph, cheaters_network, fetch_Planetoid_dataset
 from modules.models import LaplacianRegulaizer, GNNSimple, GNNAPPNP,  Alearner, MlpG2g
