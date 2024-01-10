@@ -16,15 +16,16 @@ conda activate GradientScarcity
 
 ## Running the code:
 The main script is learn.py.
-To run the script one needs to specify:
+To run the script one needs to pass a few arguments:
 
-- **the dataset** from: Cora, CiteSeer, PubMed, Cheaters, Synthetic1HighFrequency, Synthetic1LowFrequency.
-- **the inner model** from: GNN_simple, APPNP, Laplacian.
-- **the version of the bilevel framework** from: BO, BO+G2G, BO+regularization.
+- **dataset** from: Cora, CiteSeer, PubMed, Cheaters, Synthetic1HighFrequency, Synthetic1LowFrequency.
+- **inner_model** from: GNN_simple, APPNP, Laplacian.
+- **method** the version of the bilevel framework from: BO, BO+G2G, BO+regularization.
+- **plot** from: True, False. A boolean deciding whether the code is run to only plot the hypergradient at iteration 9 or for a full optimization of the bilevel model. In the former case, only 9 outer iterations are performed.
 
-For instance, to experiment on Cora using the 2-layer GNN in the paper, and using the bilevel framework without any fix (BO), one can execute:
+For instance, to plot the hypergradient obtained at the outer iteration 9 on Cora, while using the 2-layer GNN in the paper, and using the bilevel framework without any fix (BO), one can execute:
 ```
-python -u learn.py Cora GNN_simple BO
+python -u learn.py --dataset Cora --inner_model APPNP --method BO --plot True
 ```
 
 Other hyperparameters can also be passed as optional arguments. To get a list of these options, execute the following command while still activating ```GradientScarcity``` environment:
