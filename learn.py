@@ -1,17 +1,10 @@
 import argparse
-import os.path as osp
 import os
-import sys
-import math
 import higher
-import matplotlib.pyplot as plt
-from matplotlib.colors import SymLogNorm, LogNorm
 import torch
-import networkx as nx
-from torch_geometric.datasets import Planetoid
 from modules.datasets import fetch_dataset, make_graph_connected
 from modules.models import LaplacianRegulaizer, GNNSimple, GNNAPPNP,  Alearner, MlpG2g
-from modules.myfuns import delete_files_in_directory
+from modules.myfuns import delete_files_in_directory, plot_hypergradient_GNNs_case
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
@@ -80,8 +73,6 @@ def get_args():
         args.appnp_alpha= 20
     return args
 
-
-
 def train_gnns(args, data, inner_model, edge_attr):
     # define the inner optimizer
     inner_optim = torch.optim.Adam(inner_model.parameters(), lr=args.lr_in, weight_decay=5e-4)
@@ -111,7 +102,6 @@ def train_gnns(args, data, inner_model, edge_attr):
         # compute predicted classes:
         out = fmodel(data.x, data.edge_index, edge_attr)
     return out, inner_loss, best_val_acc, best_test_acc
-
 
 def train(args, data, graph_gener, inner_model):
     criterion = torch.nn.CrossEntropyLoss() if args.dataset in ['Cora', 'CiteSeer', 'PubMed', 'Cheaters'] else torch.nn.MSELoss()
@@ -172,6 +162,8 @@ def train(args, data, graph_gener, inner_model):
             torch.save(tr_out_acc[:itrout], os.path.join(args.output_dir, "tr_out_acc.pt"))
             torch.save(val_acc[:itrout], os.path.join(args.output_dir, "val_acc.pt"))
             torch.save(test_acc[:itrout], os.path.join(args.output_dir, "test_acc.pt"))
+        if args.plot is True and itrout ==0:
+            break
     print(f"Best validation accuracy: {best_val_acc:.4f}, Test accuracy: {best_test_acc:.4f}")
 
 if __name__ == "__main__":
@@ -203,3 +195,6 @@ if __name__ == "__main__":
         inner_model = LaplacianRegulaizer(lr=args.lr_in, MAX_ITER=args.MAX_IN_ITER, train_mask=data.train_in_mask, task='regression' if args.dataset in ['Synthetic1HighFrequency', 'Synthetic1LowFrequency'] else 'classification', num_classes=data.num_classes)
 
     train(args, data, graph_gener, inner_model)
+    # if plotting the hypergradient at iteration 9 is the goal of running the goal:
+    if args.plot is True:
+        plot_hypergradient_GNNs_case(args,0)
