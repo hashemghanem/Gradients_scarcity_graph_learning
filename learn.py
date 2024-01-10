@@ -7,7 +7,6 @@ from modules.models import LaplacianRegulaizer, GNNSimple, GNNAPPNP,  Alearner, 
 from modules.myfuns import delete_files_in_directory, plot_hypergradient_GNNs_case
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
-
 def get_args():
     # dataset and models
     parser = argparse.ArgumentParser(description='Parser for the bilevel framework')
@@ -68,9 +67,9 @@ def get_args():
     if args.graph_reg_mag is None:
         args.graph_reg_mag = 1.
     if args.appnp_k is None:
-        args.appnp_k= 20
+        args.appnp_k=  10
     if args.appnp_alpha is None:
-        args.appnp_alpha= 20
+        args.appnp_alpha= 0.1
     return args
 
 def train_gnns(args, data, inner_model, edge_attr):
@@ -162,7 +161,7 @@ def train(args, data, graph_gener, inner_model):
             torch.save(tr_out_acc[:itrout], os.path.join(args.output_dir, "tr_out_acc.pt"))
             torch.save(val_acc[:itrout], os.path.join(args.output_dir, "val_acc.pt"))
             torch.save(test_acc[:itrout], os.path.join(args.output_dir, "test_acc.pt"))
-        if args.plot is True and itrout ==0:
+        if args.plot is True and itrout ==9:
             break
     print(f"Best validation accuracy: {best_val_acc:.4f}, Test accuracy: {best_test_acc:.4f}")
 
@@ -186,7 +185,7 @@ if __name__ == "__main__":
     if args.method == 'BO+G2G':
         graph_gener = MlpG2g(data.x.shape[1], args.g2g_hid_dim, nlayers=args.g2g_num_layers).to(device)
     else:
-        graph_gener = Alearner(data.edge_attr.shape[0]).to(device)
+        graph_gener = Alearner(data.edge_index.shape[1]).to(device)
     if args.inner_model =="GNN_simple":
         inner_model = GNNSimple(data.num_features, args.gnn_hid_dim, data.num_classes).to(device)
     elif args.inner_model =="APPNP":
@@ -197,4 +196,4 @@ if __name__ == "__main__":
     train(args, data, graph_gener, inner_model)
     # if plotting the hypergradient at iteration 9 is the goal of running the goal:
     if args.plot is True:
-        plot_hypergradient_GNNs_case(args,0)
+        plot_hypergradient_GNNs_case(args,9)

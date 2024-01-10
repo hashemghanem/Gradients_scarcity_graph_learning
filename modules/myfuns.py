@@ -411,10 +411,13 @@ def plot_hypergradient_GNNs_case(args, itrout=9):
     dist_out_edge = dist_out_edge.reshape(data.edge_index.size()).min(dim=0).values
     print("max dist_out_edge", dist_out_edge.max())
     print("max dist_in_edge", dist_in_edge.max())
-    dist_edge = dist_inout[data.edge_index.flatten()]
-    dist_edge = dist_edge.reshape(data.edge_index.size()).min(dim=0).values
-    # In case we have nodes with no path to a labelled node, put their distance to 15 for plotting purposes:
-    dist_edge[dist_edge == -1] = 15
+    if args.inner_model =='Laplacian':
+        dist_edge = dist_out_edge + dist_in_edge
+    else:
+        dist_edge = dist_inout[data.edge_index.flatten()]
+        dist_edge = dist_edge.reshape(data.edge_index.size()).min(dim=0).values
+        # In case we have nodes with no path to a labelled node, put their distance to 15 for plotting purposes:
+        dist_edge[dist_edge == -1] = 15
     print("max dist_edge", dist_edge.max())
     # print percentage of edges with distance less than 2
     print("percentage of edges with distance less than 3",(dist_edge < 3).sum()/dist_edge.shape[0])
@@ -431,7 +434,8 @@ def plot_hypergradient_GNNs_case(args, itrout=9):
     axs.scatter(dist_edge, grad_no_fix, marker=mrk[0], facecolors='none', edgecolors=cb_clr_cycle[0])
     axs.set_yscale('symlog', linthresh=1e-6)
     axs.set_title(args.dataset)
-    axs.set_xlabel(r'ED to $V_{in}\cup V_{out}$')
+    xlabel = r'ECD to $V_{in}, V_{out}$' if args.inner_model =='Laplacian' else r'ED to $V_{in}\cup V_{out}$'
+    axs.set_xlabel(xlabel)
     axs.set_ylabel(r"Hypergradient(" + args.inner_model + " case)")
     axs.grid()
     yticks = SymmetricalLogLocator(base=1000, linthresh=1e-6)
