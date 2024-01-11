@@ -154,7 +154,7 @@ class LaplacianRegulaizer:
             self.lossf = nn.CrossEntropyLoss()
             self.num_classes = num_classes
 
-    def get_loss(self, edge_index, edge_attr, y, y_hat, lamb="inv_npoints_sqr", extra_lamb=1.):
+    def get_loss(self, edge_index, edge_attr, y, y_hat, lamb="inv_adj_sum", extra_lamb=1.):
         npoints = y.shape[0]
         data_fidelity = self.lossf(y_hat[self.train_mask], y[self.train_mask])
         reg_term = (edge_attr*torch.square(y_hat[edge_index[0]] - y_hat[edge_index[1]]).T).T
@@ -166,20 +166,32 @@ class LaplacianRegulaizer:
         loss = data_fidelity + extra_lamb*lamb*reg_term
         return loss, data_fidelity
 
-    def optimize_yhat(self, edge_index, edge_attr, y, y_hat=None, lamb="inv_npoints_sqr", extra_lamb=1.):
-        if y_hat is None and self.task == 'classification':
-            y_hat = torch.rand((y.shape[0], self.num_classes), requires_grad=True, device=edge_index.device)
-        elif y_hat is None and self.task == 'regression':
-            y_hat = torch.rand(y.size(), requires_grad=True, device=edge_index.device)
+    def optimize_yhat(self, data, edge_attr):
+        if self.task == 'classification':
+            y_hat = torch.rand((data.y.shape[0], self.num_classes), requires_grad=True, device=data.edge_index.device)
+        elif self.task == 'regression':
+            y_hat = torch.rand(data.y.size(), requires_grad=True, device=data.edge_index.device)
 
         inner_opt = torch.optim.Adam([y_hat], lr=self.lr, weight_decay=1e-5)
         inner_opt = higher.get_diff_optim(inner_opt, [y_hat], track_higher_grads=True)
+        best_test_acc,  best_val_acc = 0., 0.
         for i in range(self.MAX_ITER):
-            loss, data_fidelity = self.get_loss(edge_index, edge_attr, y, y_hat, lamb, extra_lamb)
-            y_hat, = inner_opt.step(loss, params=[y_hat])
+            inner_loss, data_fidelity = self.get_loss(data.edge_index, edge_attr, data.y, y_hat)
+            y_hat, = inner_opt.step(inner_loss, params=[y_hat])
+            accs = []
+            for _, mask in data('train_in_mask', 'train_out_mask', 'val_mask', 'test_mask'):
+                pred = y_hat[mask].max(1)[1]
+                acc = pred.eq(data.y[mask]).sum().item() / mask.sum().item()
+                accs.append(acc)
+            if accs[2] > best_val_acc:
+                best_val_acc = accs[2]
+                best_test_acc = accs[3]
+
             if i == 0 or (i+1) % 100 == 0:
-                print("Iter {:<30}, inner loss= {:<30}, data fidelity= {:<20}".format(i+1, loss.item(), data_fidelity))
-        return y_hat, loss
+                print(f'Inner iteration: {i+1:03d}, Inner: {accs[0]:.4f}, Outer: {accs[1]:.4f}, '
+                      f'Validation: {accs[2]: .4f}, Test: {accs[3]: .4f},  InLoss: {inner_loss.item():.6f}'
+                      f' Data fidelity: {data_fidelity.item():.6f}')
+        return y_hat, inner_loss, best_test_acc,  best_val_acc
 
 
 class Alearner(nn.Module):

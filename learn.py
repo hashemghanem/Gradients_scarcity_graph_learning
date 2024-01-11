@@ -119,7 +119,7 @@ def train(args, data, graph_gener, inner_model):
         if args.inner_model in ['GNN_simple', 'APPNP']:
             out, tr_in_loss[itrout], val_acc_iteration, test_acc_iteration = train_gnns(args, data, inner_model, edge_attr)
         elif args.inner_model == 'Laplacian':
-            out, tr_in_loss[itrout] = inner_model.optimize_yhat(args, data, inner_model, graph_gener)
+            out, tr_in_loss[itrout], val_acc_iteration, test_acc_iteration = inner_model.optimize_yhat(data, edge_attr)
         # check if a better val_acc is obtained
         if val_acc_iteration > best_val_acc:
             best_val_acc = val_acc_iteration
