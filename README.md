@@ -25,7 +25,7 @@ To run the script one needs to pass a few arguments:
 
 For instance, to plot the hypergradient obtained at the outer iteration 9 on Cora, while using the 2-layer GNN in the paper, and using the bilevel framework without any fix (BO), one can execute:
 ```
-python -u learn.py --dataset Cora --inner_model APPNP --method BO --plot True
+python -u learn.py --dataset Cora --inner_model GNN_simple --method BO --plot True
 ```
 
 Other hyperparameters can also be passed as optional arguments. To get a list of these options, execute the following command while still activating ```GradientScarcity``` environment:
