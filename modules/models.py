@@ -2,76 +2,9 @@ import torch
 import torch.nn as nn
 import higher
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, GraphConv, APPNP
-from torch_geometric.utils import dense_to_sparse
+from torch_geometric.nn import  GraphConv, APPNP
 
 
-
-
-class GCN(torch.nn.Module):
-    def __init__(self, inp_dim, hidden_dim, out_dim=7):
-        super().__init__()
-        self.conv1 = GraphConv(inp_dim, hidden_dim)
-        self.conv2 = GraphConv(hidden_dim, out_dim)
-
-    def forward(self, adj_est, x):
-        npoints = x.shape[1]
-        x = x.view(-1, x.shape[-1])
-        edge_attr = edge_index = adj_est
-        # edge_index, edge_attr = dense_to_sparse(adj_est)
-        x = self.conv1(x, edge_index)
-        x = F.relu(x)
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.conv2(x, edge_index, edge_attr)
-        return x.view(-1, npoints, x.shape[1])
-
-
-class MlpPointWise(nn.Module):
-    def __init__(self, inp_dim, hid_dim, out_dim, nlayers=1):
-        super().__init__()
-        self.nlayers = nlayers
-        self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.layers = nn.ModuleList(
-            [nn.Linear(hid_dim, hid_dim) for _ in range(nlayers-1)])
-        self.bns = nn.ModuleList(
-            [nn.BatchNorm1d(hid_dim) for _ in range(nlayers-1)])
-        self.fc2 = nn.Linear(hid_dim, out_dim)
-
-    def forward(self, x):
-        x = F.elu(self.fc1(x))
-        for i in range(self.nlayers-1):
-            x = F.elu(self.layers[i](x))
-            # x = self.bns[i](x)
-        x = self.fc2(x)
-        return x
-
-
-
-
-
-    def __init__(self, inp_dim, hid_dim, out_dim=1):
-        super().__init__()
-        self.embed_pnt = MlpPointWise(inp_dim, hid_dim, hid_dim, 1)
-        self.fc1 = torch.nn.Linear(hid_dim, hid_dim)
-        self.fc2 = torch.nn.Linear(hid_dim, hid_dim)
-        self.fc3 = torch.nn.Linear(hid_dim, out_dim)
-
-    def get_g2g_input(self, x, edge_index):
-        feat1 = x[edge_index[0]]
-        feat2 = x[edge_index[1]]
-        feats = (feat1-feat2)**2
-        return feats
-
-    def forward(self, x, edge_index):
-        x = self.embed_pnt(x)
-        x = self.get_g2g_input(x, edge_index)
-        # x = F.dropout(x, p=0.6, training=self.training)
-        x = F.elu(self.fc1(x))
-        # x = F.dropout(x, p=0.6, training=self.training)
-        # x = torch.relu(self.fc2(x))
-        x = torch.sigmoid(self.fc3(x)).squeeze()
-        # don't forget to change GAM  BCE loss if you use sigmoid
-        return x
 
 class MlpG2g(torch.nn.Module):
     def __init__(self, inp_dim, hid_dim, out_dim=1, nlayers=1):
@@ -90,28 +23,6 @@ class MlpG2g(torch.nn.Module):
         x = torch.sigmoid(self.fc2(x)).squeeze()
         return x
 
-
-class mlp(nn.Module):
-    def __init__(self, inp_dim, hid_dim, nlayers=1, p=.5):
-        super().__init__()
-        self.nlayers = nlayers
-        self.fc1 = nn.Linear(inp_dim, hid_dim)
-        self.layers = nn.ModuleList(
-            [nn.Linear(hid_dim, hid_dim) for _ in range(nlayers-1)])
-        self.bns = nn.ModuleList(
-            [nn.BatchNorm1d(hid_dim) for _ in range(nlayers-1)])
-        self.fc2 = nn.Linear(hid_dim, 1)
-
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        for i in range(self.nlayers-1):
-            x = F.relu(self.layers[i](x))
-            x = self.bns[i](x)
-        x = torch.sigmoid(self.fc2(x))
-        return x
-
-
-
 class GNNSimple(torch.nn.Module):
     def __init__(self,inp_dim, hid_dim, out_dim):
         super().__init__()
@@ -122,7 +33,6 @@ class GNNSimple(torch.nn.Module):
         x = F.elu(self.conv1(x, edge_index, edge_attr))
         x = self.conv2(x, edge_index, edge_attr)
         return x
-
 
 class GNNAPPNP(torch.nn.Module):
     def __init__(self, inp_dim, hid_dim, out_dim, appnp_k, appnp_alpha):
@@ -138,8 +48,6 @@ class GNNAPPNP(torch.nn.Module):
         x = self.conv1(x, edge_index, edge_attr)
         x = self.conv2(x, edge_index, edge_attr)
         return x
-
-
 
 class LaplacianRegulaizer:
     """Identical to LaplaceDenoiser class but adapted to 1-sized datasets."""
@@ -192,7 +100,6 @@ class LaplacianRegulaizer:
                       f'Validation: {accs[2]: .4f}, Test: {accs[3]: .4f},  InLoss: {inner_loss.item():.6f}'
                       f' Data fidelity: {data_fidelity.item():.6f}')
         return y_hat, inner_loss, best_test_acc,  best_val_acc
-
 
 class Alearner(nn.Module):
     def __init__(self, num_edges, init=None):
